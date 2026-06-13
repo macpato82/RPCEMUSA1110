@@ -1,0 +1,36 @@
+# Copyrighted RISC OS content - do NOT redistribute
+roms/
+hostfs/
+*.rom
+*.ROM
+
+# Disc images / machine state (user data, may be copyrighted)
+*.adf
+*.hfe
+*.hdf
+cmos.ram
+cmos.ram.bak
+
+# Build artifacts
+rpcemu-interpreter
+rpcemu-recompiler
+rpcemu-interpreter-debug
+rpcemu-recompiler-debug
+*.o
+*.obj
+*.so
+*.a
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+src/qt5/Makefile
+src/qt5/Makefile.Debug
+src/qt5/Makefile.Release
+src/qt5/release/
+src/qt5/debug/
+
+# Logs / temp
+rpclog.txt
+rpc.cfg

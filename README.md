@@ -95,4 +95,4 @@ The following are deliberately excluded (see [.gitignore](.gitignore)):
 ## Credits
 
 - RPCEmu by the RPCEmu developers — <http://www.marutan.net/rpcemu/>
-- This fork's modifications were developed with assistance from Claude Code.
+- Edited by RISCOS Technologies

@@ -6,8 +6,10 @@ number of fixes.
 
 RPCEmu is licensed under the GPL — see [COPYING](COPYING).
 
-> **You must supply your own RISC OS ROM image.** No ROM is included in this
-> repository. See [Requirements](#requirements) below.
+> **ROM included.** This repository ships `roms/RISCPC.ROM` — **RISC OS 5.31**,
+> a RISC OS Open build that is redistributable under the Apache License 2.0.
+> See [roms/RISC-OS-5-LICENCE.txt](roms/RISC-OS-5-LICENCE.txt). You can also get
+> the latest official images from <https://www.riscosopen.org/>.
 
 ---
 
@@ -50,9 +52,9 @@ RPCEmu is licensed under the GPL — see [COPYING](COPYING).
 
 - A C/C++ toolchain (GCC/Clang) and `make`
 - **Qt 5** (Widgets, GUI, Multimedia) and `qmake`
-- A **RISC OS ROM image** placed in a `roms/` directory next to the executable
-  (e.g. `roms/RISCPC.ROM`). You must own a valid licence for the ROM; it is not
-  distributed here.
+- A **RISC OS ROM image** in a `roms/` directory next to the executable. One is
+  included here (`roms/RISCPC.ROM`, RISC OS 5.31); newer official builds are at
+  <https://www.riscosopen.org/>.
 - Optionally, a HostFS directory and disc images for storage.
 
 ## Building (Linux)
@@ -82,12 +84,12 @@ list, or set `model=RPCSA1110` in `rpc.cfg`.
 
 ## Not included (and why)
 
-This repository contains **source only**. The following are deliberately
-excluded (see [.gitignore](.gitignore)):
+The following are deliberately excluded (see [.gitignore](.gitignore)):
 
-- **RISC OS ROM images** (`roms/`, `*.ROM`) — copyrighted; supply your own.
 - **HostFS content** — a full RISC OS environment includes copyrighted OS and
   application files.
+- Proprietary ROMs (RISC OS 4 / Select / Six). Only the redistributable
+  RISC OS 5 ROM is included.
 - Disc images, `cmos.ram`, local `rpc.cfg`, and build artifacts.
 
 ## Credits

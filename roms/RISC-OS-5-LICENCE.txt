@@ -1,0 +1,16 @@
+RISCPC.ROM in this directory is RISC OS 5.31 (24 Apr 2024), a Risc PC / IOMD
+build of RISC OS 5 produced by the RISC OS Open project.
+
+RISC OS 5 source is published by RISC OS Open Limited under the Apache License,
+Version 2.0, which permits redistribution of source and binary forms (including
+this compiled ROM image) provided the licence terms are met.
+
+  Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
+  RISC OS Open:       https://www.riscosopen.org/
+
+Copyright of RISC OS 5 and its components remains with RISC OS Open Limited and
+the respective contributors. This file is provided to satisfy the Apache-2.0
+requirement to retain attribution/notices alongside the redistributed binary.
+
+The latest official ROM images and full source are available from RISC OS Open
+at the link above.

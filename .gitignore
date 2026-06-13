@@ -1,8 +1,13 @@
-# Copyrighted RISC OS content - do NOT redistribute
-roms/
+# RISC OS content.
+# The RISC OS 5 (RISC OS Open) ROM is Apache-2.0 licensed and redistributable,
+# so it is kept. Any OTHER ROM dropped in roms/ is ignored by default - do not
+# commit proprietary ROMs (RISC OS 4 / Select / Six etc.).
+roms/*
+!roms/RISCPC.ROM
+!roms/roms.txt
+!roms/RISC-OS-5-LICENCE.txt
+# hostfs/ holds a full RISC OS environment (copyrighted OS + applications).
 hostfs/
-*.rom
-*.ROM
 
 # Disc images / machine state (user data, may be copyrighted)
 *.adf

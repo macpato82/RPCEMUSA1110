@@ -88,14 +88,17 @@ ConfigureDialog::ConfigureDialog(Emulator &emulator, Config *config_copy, Model 
 	// Create VRAM group
 	vram_0 = new QRadioButton("None");
 	vram_2 = new QRadioButton("2 MB (8 MB if OS supported)");
+	vram_16 = new QRadioButton("16 MB (if OS supported)");
 
 	vram_group = new QButtonGroup();
 	vram_group->addButton(vram_0);
 	vram_group->addButton(vram_2);
+	vram_group->addButton(vram_16);
 
 	vram_vbox = new QVBoxLayout();
 	vram_vbox->addWidget(vram_0);
 	vram_vbox->addWidget(vram_2);
+	vram_vbox->addWidget(vram_16);
 
 	vram_group_box = new QGroupBox("VRAM");
 	vram_group_box->setLayout(vram_vbox);
@@ -190,8 +193,9 @@ ConfigureDialog::dialog_accepted()
 	if(mem_256->isChecked()) new_config.mem_size = 256;
 
 	// VRAM
-	if (vram_0->isChecked()) new_config.vram_size = 0;
-	if (vram_2->isChecked()) new_config.vram_size = 8;
+	if (vram_0->isChecked())  new_config.vram_size = 0;
+	if (vram_2->isChecked())  new_config.vram_size = 8;
+	if (vram_16->isChecked()) new_config.vram_size = 16;
 
 	// Sound
 	if(sound_checkbox->isChecked()) {
@@ -276,10 +280,14 @@ ConfigureDialog::applyConfig()
 	// VRAM
 	vram_0->setChecked(false);
 	vram_2->setChecked(false);
+	vram_16->setChecked(false);
 
 	switch (config_copy->vram_size) {
 	case 0:
 		vram_0->setChecked(true);
+		break;
+	case 16:
+		vram_16->setChecked(true);
 		break;
 	default:
 		vram_2->setChecked(true);

@@ -25,6 +25,15 @@ RPCEmu is licensed under the GPL — see [COPYING](COPYING).
     StrongARM and boots through to the desktop. It is therefore
     StrongARM-compatible on the stock Risc PC ROM.
 
+### Enhancements
+- **16 MB VRAM option.** RPCEmu previously offered up to 8 MB of (emulated)
+  VRAM. A new **16 MB** choice has been added — the maximum that fits the Risc
+  PC's `0x02000000` VRAM window. The VRAM allocation, the video dirty-page
+  buffer, and the framebuffer wrap boundaries were extended accordingly
+  (`src/mem.c`, `src/vidc20.c`, `src/qt5/`). RISC OS detects VRAM size by
+  address-aliasing probe, so how much of the 16 MB it exposes as extra screen
+  modes depends on the RISC OS build's own VRAM support.
+
 ### Fixes
 - **1920×1080 (and other large-mode) crash.** The video update wrapped the
   video thread's framebuffer (`thr.bitmap`) in a `QImage` and passed it to the

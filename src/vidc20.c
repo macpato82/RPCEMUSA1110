@@ -94,10 +94,14 @@ static struct cached_state {
         int threadpending;
 } thr;
 
+/* One dirty-buffer entry per 4KB page of VRAM. Sized for the maximum
+   supported VRAM (16MB / 4KB = 4096 entries). */
+#define DIRTYBUFFER_SIZE (16 * 1024 * 1024 / 4096)
+
 /* Two dirty buffers, so one can be written to by the main thread
    while the display thread is reading the other */
-static uint8_t dirtybuffer1[512 * 4];
-static uint8_t dirtybuffer2[512 * 4];
+static uint8_t dirtybuffer1[DIRTYBUFFER_SIZE];
+static uint8_t dirtybuffer2[DIRTYBUFFER_SIZE];
 
 /* Dirty buffer currently in use by main thread */
 uint8_t *dirtybuffer = dirtybuffer1;
@@ -404,7 +408,7 @@ unlock_mutex_return:
 void
 vidcthread(void)
 {
-	const uint32_t vidstart = thr.iomd_vidstart & 0x7ffff0;
+	const uint32_t vidstart = thr.iomd_vidstart & 0xfffff0;
 	uint32_t vidend;
 	int drawit = 0;
 	int x, y;
@@ -430,12 +434,12 @@ vidcthread(void)
 		/* Using VRAM for video */
 		ramp = (const uint8_t *) vram;
 		vidend = (thr.iomd_vidend + 2048) & 0xfffff0;
-		if (vidend > 0x800000) {
-			vidend &= 0x7ffff0;
+		if (vidend > 0x1000000) {
+			vidend &= 0xfffff0;
 		}
 	}
 
-	addr = thr.iomd_vidinit & 0x7fffff;
+	addr = thr.iomd_vidinit & 0xffffff;
 
 	drawit = thr.dirtybuffer[addr >> 12];
 	if (drawit) {
@@ -829,7 +833,7 @@ vidcthread(void)
 	oldcursory = thr.cursory;
 
 	/* Clean the dirtybuffer now we have updated eveything in it */
-	memset(thr.dirtybuffer, 0, 512 * 4);
+	memset(thr.dirtybuffer, 0, DIRTYBUFFER_SIZE);
 
 	if (yl == -1 || yh == -1) {
 		return;
@@ -1036,5 +1040,5 @@ writevidc20(uint32_t val)
 void
 resetbuffer(void)
 {
-	memset(dirtybuffer, 0xff, 512 * 4);
+	memset(dirtybuffer, 0xff, DIRTYBUFFER_SIZE);
 }

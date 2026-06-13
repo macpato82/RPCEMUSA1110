@@ -75,7 +75,7 @@ static int vraddrlpos, vwaddrlpos;
 void mem_init(void)
 {
 	rom  = malloc(ROMSIZE);
-	vram = malloc(8 * 1024 * 1024); /*8 meg VRAM!*/
+	vram = malloc(16 * 1024 * 1024); /* 16MB VRAM (max for the 0x02000000 window) */
 	romb  = (uint8_t *) rom;
 	vramb = (uint8_t *) vram;
 }

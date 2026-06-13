@@ -135,11 +135,12 @@ config_load(Config * config)
 	}
 
 	sText = settings.value("vram_size", "").toString();
-	if (!QString::compare(sText, "", Qt::CaseInsensitive)) {
-		config->vram_size = 8;
-	} else if (!QString::compare(sText, "0", Qt::CaseInsensitive)) {
+	if (!QString::compare(sText, "0", Qt::CaseInsensitive)) {
 		config->vram_size = 0;
+	} else if (!QString::compare(sText, "16", Qt::CaseInsensitive)) {
+		config->vram_size = 16;
 	} else {
+		/* "", "2" (legacy) and "8" all mean the 8MB VRAM option */
 		config->vram_size = 8;
 	}
 
@@ -274,8 +275,10 @@ config_save(Config *config)
 	sprintf(s, "%s", models[machine.model].name_config);
 	settings.setValue("model", s);
 
-	if (config->vram_size != 0) {
-		settings.setValue("vram_size", "2");
+	if (config->vram_size == 16) {
+		settings.setValue("vram_size", "16");
+	} else if (config->vram_size != 0) {
+		settings.setValue("vram_size", "8");
 	} else {
 		settings.setValue("vram_size", "0");
 	}

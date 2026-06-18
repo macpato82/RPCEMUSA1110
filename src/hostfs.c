@@ -344,10 +344,8 @@ path_construct(const char *old_path, const char *ro_path,
   assert(ro_path);
   assert(new_path);
 
-  /* TODO Ensure buffer safety is observed */
-
   /* Start by basing new Host path on the old one */
-  strcpy(new_path, old_path);
+  snprintf(new_path, len, "%s", old_path);
 
   /* Find the leaf of the RISC OS path */
   {
@@ -371,7 +369,11 @@ path_construct(const char *old_path, const char *ro_path,
     } else {
       /* No slash currently in Host path, but we need one */
       /* New leaf is then appended */
-      strcat(new_path, "/");
+      size_t cur_len = strlen(new_path);
+      if (cur_len + 1 < len) {
+        new_path[cur_len] = '/';
+        new_path[cur_len + 1] = '\0';
+      }
       new_leaf = new_path + strlen(new_path);
     }
 
@@ -382,19 +384,22 @@ path_construct(const char *old_path, const char *ro_path,
   /* Calculate where to place new comma suffix */
   /* New suffix appended onto existing path */
   new_suffix = new_path + strlen(new_path);
+  {
+    size_t suffix_space = len - (size_t)(new_suffix - new_path);
 
-  if ((load & 0xfff00000u) == 0xfff00000u) {
-    ARMword filetype = (load >> 8) & 0xfff;
+    if ((load & 0xfff00000u) == 0xfff00000u) {
+      ARMword filetype = (load >> 8) & 0xfff;
 
-    /* File has filetype and timestamp */
+      /* File has filetype and timestamp */
 
-    /* Don't set for default filetype */
-    if (filetype != DEFAULT_FILE_TYPE) {
-      sprintf(new_suffix, ",%03x", filetype);
+      /* Don't set for default filetype */
+      if (filetype != DEFAULT_FILE_TYPE) {
+        snprintf(new_suffix, suffix_space, ",%03x", filetype);
+      }
+    } else {
+      /* File has load and exec addresses */
+      snprintf(new_suffix, suffix_space, ",%x-%x", load, exec);
     }
-  } else {
-    /* File has load and exec addresses */
-    sprintf(new_suffix, ",%x-%x", load, exec);
   }
 }
 
@@ -2090,7 +2095,7 @@ hostfs_init(void)
 {
   int c;
 
-  snprintf(HOSTFS_ROOT, sizeof(HOSTFS_ROOT), "%shostfs", rpcemu_get_datadir());
+  snprintf(HOSTFS_ROOT, sizeof(HOSTFS_ROOT), "%s%s", rpcemu_get_datadir(), machine_hostfs_dir);
   for (c = 0; c < 511; c++) {
     if (HOSTFS_ROOT[c] == '\\') {
       HOSTFS_ROOT[c] = '/';

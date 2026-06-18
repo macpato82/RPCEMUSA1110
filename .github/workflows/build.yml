@@ -1,0 +1,80 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------- Linux ----
+  linux:
+    runs-on: ubuntu-latest
+    name: linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake \
+            qt6-base-dev qt6-multimedia-dev libgl1-mesa-dev
+
+      - name: Build (CMake, Qt6, dynarec)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRPCEMU_DYNAREC=ON
+          cmake --build build -j"$(nproc)"
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist/rpcemu-linux
+          cp rpcemu-recompiler dist/rpcemu-linux/
+          cp -r configs roms poduleroms resources dist/rpcemu-linux/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-linux/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-linux-x86_64
+          path: dist/rpcemu-linux
+
+  # -------------------------------------------------------------- Windows ----
+  windows:
+    runs-on: windows-latest
+    name: windows-x86_64
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-qt5-multimedia
+            mingw-w64-x86_64-tools
+
+      # Interpreter build: the x86 dynarec targets the SysV ABI, not Win64.
+      - name: Build (qmake, interpreter)
+        working-directory: src/qt5
+        run: |
+          qmake rpcemu.pro
+          mingw32-make -j2
+
+      - name: Bundle Qt runtime
+        run: |
+          mkdir -p dist/rpcemu-windows
+          cp rpcemu-interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp RPCEmu-Interpreter.exe dist/rpcemu-windows/
+          windeployqt --release --no-translations dist/rpcemu-windows/*.exe
+          cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-windows-x86_64
+          path: dist/rpcemu-windows

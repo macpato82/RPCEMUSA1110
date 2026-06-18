@@ -1,0 +1,2 @@
+RISC OS 4.39 (Adjust) ROM for the "RISC OS 4" machine selection.
+All non-.txt files here are concatenated alphabetically to form the ROM.

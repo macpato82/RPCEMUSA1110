@@ -68,10 +68,27 @@ RPCEmu is licensed under the GPL — see [COPYING](COPYING).
 
 ## Building (Linux)
 
+### CMake (recommended)
+
+```sh
+# Recompiler (dynarec) build, against Qt 6 (default):
+cmake -S . -B build -DRPCEMU_DYNAREC=ON
+cmake --build build -j"$(nproc)"
+
+# …or the portable interpreter build:
+cmake -S . -B build -DRPCEMU_DYNAREC=OFF
+cmake --build build -j"$(nproc)"
+```
+
+The build defaults to **Qt 6**; add `-DRPCEMU_QT_VERSION=5` to build against Qt 5
+instead. Both Qt versions are supported.
+
+### qmake (legacy)
+
 ```sh
 cd src/qt5
 
-# Recompiler (dynarec) build — recommended:
+# Recompiler (dynarec) build:
 qmake CONFIG+=dynarec rpcemu.pro
 make -j"$(nproc)"
 
@@ -80,8 +97,9 @@ qmake rpcemu.pro
 make -j"$(nproc)"
 ```
 
-The resulting `rpcemu-recompiler` / `rpcemu-interpreter` binary is placed in the
-repository root. Run it from a directory containing your `roms/` folder.
+Either way, the resulting `rpcemu-recompiler` / `rpcemu-interpreter` binary is
+placed in the repository root. Run it from a directory containing your `roms/`
+folder.
 
 ## Running the SA-1110 model
 

@@ -21,9 +21,13 @@
 #include <iostream>
 #include <list>
 
+#include <QApplication>
 #include <QGuiApplication>
 #include <QDesktopServices>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QSettings>
+#include <QStringList>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
@@ -346,6 +350,8 @@ MainWindow::MainWindow(Emulator &emulator)
 	create_menus();
 	create_tool_bars();
 
+	update_recent_discs_menu();
+
 	readSettings();
 
 	this->setFixedSize(this->sizeHint());
@@ -490,16 +496,25 @@ MainWindow::closeEvent(QCloseEvent *event)
 	// Wait until emulator thread has exited
 	this->emulator.thread()->wait();
 
+	// Persist GUI state (window position). Done after the emulator thread has
+	// exited, so it can't race with the config save.
+	writeSettings();
+
 	// Pass on the close message for the main window, this
 	// will cause the program to quit
 	event->accept();
 }
 
+static unsigned native_scancode_to_x11(unsigned native_scancode);
+
 void
 MainWindow::keyPressEvent(QKeyEvent *event)
 {
-	// Block keyboard input (to non-GUI elements) if menu open
-	if (this->menu_open) {
+	// Block keyboard input (to non-GUI elements) only while a menu popup is
+	// actually open. We check live (activePopupWidget) rather than the
+	// menu_open flag: under Qt 6 the QMenu aboutToHide signal does not reliably
+	// fire, leaving menu_open stuck true and swallowing all keyboard input.
+	if (QApplication::activePopupWidget() != nullptr) {
 		return;
 	}
 
@@ -510,7 +525,7 @@ MainWindow::keyPressEvent(QKeyEvent *event)
 
 	// Special case, handle windows menu key as being menu mouse button
 	if(Qt::Key_Menu == event->key()) {
-		emit this->emulator.mouse_press_signal(Qt::MidButton);
+		emit this->emulator.mouse_press_signal(Qt::MiddleButton);
 		return;
 	}
 
@@ -561,7 +576,7 @@ MainWindow::keyPressEvent(QKeyEvent *event)
 
 	// Regular case pass key press onto the emulator
 	if (!event->isAutoRepeat()) {
-		native_keypress_event(event->nativeScanCode());
+		native_keypress_event(native_scancode_to_x11(event->nativeScanCode()));
 	}
 }
 
@@ -575,14 +590,33 @@ MainWindow::keyReleaseEvent(QKeyEvent *event)
 
 	// Special case, handle windows menu key as being menu mouse button
 	if(Qt::Key_Menu == event->key()) {
-		emit this->emulator.mouse_release_signal(Qt::MidButton);
+		emit this->emulator.mouse_release_signal(Qt::MiddleButton);
 		return;
 	}
 
 	// Regular case pass key release onto the emulator
 	if (!event->isAutoRepeat()) {
-		native_keyrelease_event(event->nativeScanCode());
+		native_keyrelease_event(native_scancode_to_x11(event->nativeScanCode()));
 	}
+}
+
+/**
+ * Convert a QKeyEvent native scan code into the X11 keycode that keyboard_x.c's
+ * table expects. Under the xcb platform nativeScanCode() already returns an X11
+ * keycode; under Wayland it returns a raw Linux evdev keycode, which is exactly
+ * 8 less than the corresponding X11 keycode. Without this, the keyboard does
+ * nothing on a Wayland session (e.g. the Qt 6 default platform).
+ */
+static unsigned
+native_scancode_to_x11(unsigned native_scancode)
+{
+	static const bool is_wayland =
+	    QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+
+	if (is_wayland && native_scancode != 0) {
+		return native_scancode + 8;
+	}
+	return native_scancode;
 }
 
 /**
@@ -636,7 +670,7 @@ MainWindow::menu_screenshot()
 	                                                tr("PNG (*.png)"));
 
 	// fileName is NULL if user hit cancel
-	if (fileName != NULL) {
+	if (!fileName.isEmpty()) {
 		bool result = this->display->save_screenshot(fileName);
 
 		if (result == false) {
@@ -678,11 +712,36 @@ MainWindow::load_disc(int drive)
 		return;
 	}
 
+	load_disc_file(drive, fileName);
+}
+
+/**
+ * Load a specific disc image file into a floppy drive, and record it in the
+ * recently-used list. Shared by the file-open dialog and the Recent menu.
+ */
+void
+MainWindow::load_disc_file(int drive, const QString &fileName)
+{
 	// Inform Emulator thread of disc change
 	if (drive == 0) {
 		emit this->emulator.load_disc_0_signal(fileName);
 	} else if (drive == 1) {
 		emit this->emulator.load_disc_1_signal(fileName);
+	}
+
+	add_recent_disc(fileName);
+}
+
+/**
+ * Slot: a "Recent floppy discs" menu entry was chosen. The full path is held
+ * in the action's data; load it into floppy drive 0.
+ */
+void
+MainWindow::menu_open_recent_disc()
+{
+	QAction *action = qobject_cast<QAction *>(sender());
+	if (action) {
+		load_disc_file(0, action->data().toString());
 	}
 }
 
@@ -1027,7 +1086,7 @@ MainWindow::menu_cdrom_iso()
 	                                                tr("ISO CD-ROM Image (*.iso);;All Files (*.*)"));
 
 	/* fileName is NULL if user hit cancel */
-	if(fileName != NULL) {
+	if(!fileName.isEmpty()) {
 		if (!config_copy.cdromenabled) {
 			int ret = MainWindow::reset_question(this);
 
@@ -1207,6 +1266,13 @@ MainWindow::create_actions()
 	create_disc1_action = new QAction(tr("Create Blank Drive :1..."), this);
 	connect(create_disc1_action, &QAction::triggered, this, &MainWindow::menu_create_disc1);
 
+	// Recent floppy disc actions (populated later, hidden until used)
+	for (int i = 0; i < MaxRecentDiscs; i++) {
+		recent_disc_actions[i] = new QAction(this);
+		recent_disc_actions[i]->setVisible(false);
+		connect(recent_disc_actions[i], &QAction::triggered, this, &MainWindow::menu_open_recent_disc);
+	}
+
 	// Actions on the Disc->CD-ROM menu
 	cdrom_disabled_action = new QAction(tr("Disabled"), this);
 	cdrom_disabled_action->setCheckable(true);
@@ -1307,6 +1373,10 @@ MainWindow::create_menus()
 	// Disc->Floppy menu
 	floppy_menu->addAction(loaddisc0_action);
 	floppy_menu->addAction(loaddisc1_action);
+	recent_menu = floppy_menu->addMenu(tr("Recent"));
+	for (int i = 0; i < MaxRecentDiscs; i++) {
+		recent_menu->addAction(recent_disc_actions[i]);
+	}
 	floppy_menu->addSeparator();
 	floppy_menu->addAction(create_disc0_action);
 	floppy_menu->addAction(create_disc1_action);
@@ -1392,19 +1462,68 @@ MainWindow::add_menu_show_hide_handlers()
 void
 MainWindow::readSettings()
 {
-	QSettings settings("QtProject", "Application Example");
-	QPoint pos = settings.value("pos", QPoint(200, 200)).toPoint();
-	QSize size = settings.value("size", QSize(400, 400)).toSize();
-	resize(size);
-	move(pos);
+	// GUI state lives in its own file: the emulator's config_save() does a
+	// settings.clear() on rpc.cfg, which would otherwise wipe these keys.
+	QSettings settings("rpcemu-gui.ini", QSettings::IniFormat);
+
+	// Only the window position is restored; the window size is driven by the
+	// emulated display resolution (setFixedSize), so storing it is pointless.
+	if (settings.contains("window/pos")) {
+		move(settings.value("window/pos").toPoint());
+	}
 }
 
 void
 MainWindow::writeSettings()
 {
-	QSettings settings("QtProject", "Application Example");
-	settings.setValue("pos", pos());
-	settings.setValue("size", size());
+	QSettings settings("rpcemu-gui.ini", QSettings::IniFormat);
+	settings.setValue("window/pos", pos());
+}
+
+/**
+ * Record a floppy disc image at the head of the recently-used list and refresh
+ * the Recent menu. Stored in rpcemu-gui.ini (not rpc.cfg, which is cleared by
+ * the emulator's config save).
+ */
+void
+MainWindow::add_recent_disc(const QString &fileName)
+{
+	QSettings settings("rpcemu-gui.ini", QSettings::IniFormat);
+	QStringList discs = settings.value("recent/discs").toStringList();
+
+	discs.removeAll(fileName); // de-duplicate, keeping most-recent order
+	discs.prepend(fileName);
+	while (discs.size() > MaxRecentDiscs) {
+		discs.removeLast();
+	}
+
+	settings.setValue("recent/discs", discs);
+
+	update_recent_discs_menu();
+}
+
+/**
+ * Populate the Disc->Floppy->Recent submenu from the stored list.
+ */
+void
+MainWindow::update_recent_discs_menu()
+{
+	QSettings settings("rpcemu-gui.ini", QSettings::IniFormat);
+	QStringList discs = settings.value("recent/discs").toStringList();
+
+	const int count = qMin(discs.size(), (int) MaxRecentDiscs);
+	for (int i = 0; i < count; i++) {
+		// "&1 leaf.adf" - leaf name for readability, full path as the data
+		recent_disc_actions[i]->setText(QString("&%1 %2")
+		    .arg(i + 1).arg(QFileInfo(discs[i]).fileName()));
+		recent_disc_actions[i]->setData(discs[i]);
+		recent_disc_actions[i]->setVisible(true);
+	}
+	for (int i = count; i < MaxRecentDiscs; i++) {
+		recent_disc_actions[i]->setVisible(false);
+	}
+
+	recent_menu->setEnabled(count > 0);
 }
 
 void

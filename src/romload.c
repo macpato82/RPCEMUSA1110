@@ -60,6 +60,7 @@ static const rom_patch_t rom_patch[] = {
 	{ 0x1473c, { 0xe3a00402, 0xe2801004, 0xeb0001ad, 0x03a06002 }, 0x14748, 0x03a06008, "8MB VRAM RISC OS 4.33" },
 	{ 0xe504,  { 0xe3a00402, 0xe2801004, 0xeb0001ad, 0x03a06002 }, 0xe510,  0x03a06008, "8MB VRAM RISC OS 4.37" },
 	{ 0xe248,  { 0xe3a00402, 0xe2801004, 0xeb0001ae, 0x03a06002 }, 0xe254,  0x03a06008, "8MB VRAM RISC OS 4.39" },
+	{ 0xe248,  { 0xe3a00402, 0xe2801004, 0xeb0001ad, 0x03a06002 }, 0xe254,  0x03a06008, "8MB VRAM RISC OS 4.39 (Adjust)" },
 	{ 0x8a764, { 0xe1a00001, 0xe2801004, 0xeb00000d, 0x03a06002 }, 0x8a770, 0x03a06008, "8MB VRAM RISC OS 6.02" },
 };
 
@@ -119,7 +120,7 @@ void loadroms(void)
         int number_of_files = 0;
         int c;
         int pos = 0;
-        const char *dirname = "roms";
+        const char *dirname = machine_rom_dir;
         char *romfilenames[MAXROMS];
 	char romdirectory[512];
 	DIR *dir;

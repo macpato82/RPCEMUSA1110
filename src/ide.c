@@ -122,6 +122,7 @@ static struct
         int pos;
         int packlen;
         int spt[2], hpc[2];
+        int cylinders[2]; /**< Cylinders reported by IDENTIFY (derived from image size) */
         int packetstatus;
         int cdpos,cdlen;
         unsigned char asc;
@@ -202,15 +203,21 @@ ide_identify(void)
 {
 	memset(ide.buffer, 0, 512);
 
-	//ide.buffer[1] = 101; /* Cylinders */
-	ide.buffer[1] = 65535; /* Cylinders */
+	const uint32_t total_lba = (uint32_t) ide.cylinders[ide.drive] * 16 * 63;
+
+	ide.buffer[1] = (uint16_t) ide.cylinders[ide.drive]; /* Cylinders (from image size) */
 	ide.buffer[3] = 16;  /* Heads */
 	ide.buffer[6] = 63;  /* Sectors */
 	ide_padstr((char *) (ide.buffer + 10), "", 20); /* Serial Number */
 	ide_padstr((char *) (ide.buffer + 23), "v1.0", 8); /* Firmware */
 	ide_padstr((char *) (ide.buffer + 27), "RPCEmuHD", 40); /* Model */
-//	ide.buffer[49] = 0x200; /* LBA supported */
+	ide.buffer[49] = 0x200; /* Capabilities: LBA supported */
 	ide.buffer[50] = 0x4000; /* Capabilities */
+	/* Total user-addressable sectors in LBA mode (words 60-61). Lets RISC OS
+	   use LBA rather than CHS, which its big-disc FileCore needs for discs
+	   over ~512MB (CHS-only big-disc formatting hangs). */
+	ide.buffer[60] = (uint16_t) (total_lba & 0xffff);
+	ide.buffer[61] = (uint16_t) ((total_lba >> 16) & 0xffff);
 }
 
 /**
@@ -412,6 +419,23 @@ loadhd(int d, const char *filename)
 
 	ide_image_set_spt_hpc_skip512(ide.hdfile[d], d);
 
+	/* Cylinders reported to the guest by IDENTIFY DEVICE, derived from the
+	   image size using the fixed 16 heads x 63 sectors translation geometry.
+	   This makes the reported drive size match the actual image rather than a
+	   fixed ~31.5GB maximum, so *Format / HForm produce a correctly sized disc. */
+	{
+		const off64_t data_size = filesize - (off64_t) (ide.skip512[d] ? 512 : 0);
+		off64_t cyls = data_size / (16 * 63 * 512);
+
+		if (cyls > 65535) {
+			cyls = 65535;
+		}
+		if (cyls < 1) {
+			cyls = 1;
+		}
+		ide.cylinders[d] = (int) cyls;
+	}
+
 	rpclog("IDE: Loaded file '%s' as IDE disc %d, size %" PRId64 " MB (%" PRId64 ")%s\n",
 		filename,
 		d,
@@ -434,9 +458,9 @@ void resetide(void)
 
         ide.atastat = READY_STAT;
         idecallback = 0;
-	loadhd(0, "hd4.hdf");
+	loadhd(0, machine_hd4_file);
 	if (!config.cdromenabled) {
-		loadhd(1, "hd5.hdf");
+		loadhd(1, machine_hd5_file);
 	}
 }
 
@@ -765,7 +789,10 @@ void callbackide(void)
                 }
                 addr = ide_get_sector() * 512;
                 fseeko64(ide.hdfile[ide.drive], addr, SEEK_SET);
-                fwrite(ide.buffer, 512, 1, ide.hdfile[ide.drive]);
+                if (fwrite(ide.buffer, 512, 1, ide.hdfile[ide.drive]) != 1) {
+                        rpclog("IDE: write failed on drive %d at offset %" PRId64 " (%s)\n",
+                               ide.drive, (int64_t) addr, strerror(errno));
+                }
                 ide_irq_raise();
                 ide.secount--;
                 if (ide.secount != 0) {
@@ -795,7 +822,11 @@ void callbackide(void)
                 memset(ide.buffer, 0, 512);
                 for (c=0;c<ide.secount;c++)
                 {
-                        fwrite(ide.buffer, 512, 1, ide.hdfile[ide.drive]);
+                        if (fwrite(ide.buffer, 512, 1, ide.hdfile[ide.drive]) != 1) {
+                                rpclog("IDE: format write failed on drive %d (%s)\n",
+                                       ide.drive, strerror(errno));
+                                break;
+                        }
                 }
                 ide.atastat = READY_STAT;
                 ide_irq_raise();

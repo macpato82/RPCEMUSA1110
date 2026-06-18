@@ -119,8 +119,24 @@ tun_alloc(void)
 		return -1;
 	}
 
+	/* If RPCEMU_TAP names a pre-existing persistent TAP that this user owns
+	   and which is already attached to the bridge, attach to it by name. This
+	   needs no elevated privilege (unlike creating a TAP and adding it to a
+	   bridge), and the TAP creation/bridge/bring-up steps below are skipped. */
+	const char *tapname = NULL;
+	if (config.network_type == NetworkType_EthernetBridging) {
+		tapname = getenv("RPCEMU_TAP");
+		if (tapname != NULL && tapname[0] == '\0') {
+			tapname = NULL;
+		}
+	}
+
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP;
+	if (tapname != NULL) {
+		strncpy(ifr.ifr_name, tapname, IFNAMSIZ);
+		ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+	}
 
 	if (ioctl(fd, TUNSETIFF, &ifr) < 0) {
 		error("Error setting TAP on tunnel device: %s", strerror(errno));
@@ -143,7 +159,7 @@ tun_alloc(void)
 			error("Error assigning %s addr: %s", ifr.ifr_name, strerror(errno));
 			return -1;
 		}
-	} else if (config.network_type == NetworkType_EthernetBridging) {
+	} else if (config.network_type == NetworkType_EthernetBridging && tapname == NULL) {
 		struct ifreq brifr;
 
 		if (ioctl(sd, SIOCGIFINDEX, &ifr) == -1) {
@@ -159,17 +175,21 @@ tun_alloc(void)
 		}
 	}
 
-	// Get the current flags
-	if (ioctl(sd, SIOCGIFFLAGS, &ifr) == -1) {
-		error("Error getting %s flags: %s", ifr.ifr_name, strerror(errno));
-		return -1;
-	}
+	// Bring the interface up. Skipped for a pre-existing persistent TAP, which
+	// is already up - and changing interface flags would need privilege.
+	if (tapname == NULL) {
+		// Get the current flags
+		if (ioctl(sd, SIOCGIFFLAGS, &ifr) == -1) {
+			error("Error getting %s flags: %s", ifr.ifr_name, strerror(errno));
+			return -1;
+		}
 
-	// Turn on the UP flag
-	ifr.ifr_flags |= IFF_UP;
-	if (ioctl(sd, SIOCSIFFLAGS, &ifr) == -1) {
-		error("Error setting %s flags: %s", ifr.ifr_name, strerror(errno));
-		return -1;
+		// Turn on the UP flag
+		ifr.ifr_flags |= IFF_UP;
+		if (ioctl(sd, SIOCSIFFLAGS, &ifr) == -1) {
+			error("Error setting %s flags: %s", ifr.ifr_name, strerror(errno));
+			return -1;
+		}
 	}
 
 	if (config.macaddress != NULL) {

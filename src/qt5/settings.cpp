@@ -104,9 +104,9 @@ config_load(Config * config)
 	QString sText;
 	QByteArray ba;
 
-	snprintf(filename, sizeof(filename), "%srpc.cfg", rpcemu_get_datadir());
+	snprintf(filename, sizeof(filename), "%s%s", rpcemu_get_datadir(), machine_config_file);
 
-	QSettings settings("rpc.cfg", QSettings::IniFormat);
+	QSettings settings(QString::fromUtf8(machine_config_file), QSettings::IniFormat);
 
 	/* Copy the contents of the configfile to the log */
 	QStringList keys = settings.childKeys();
@@ -262,18 +262,18 @@ config_save(Config *config)
 	char filename[512];
 	QString sText;
 
-	snprintf(filename, sizeof(filename), "%srpc.cfg", rpcemu_get_datadir());
+	snprintf(filename, sizeof(filename), "%s%s", rpcemu_get_datadir(), machine_config_file);
 
-	QSettings settings("rpc.cfg", QSettings::IniFormat);
+	QSettings settings(QString::fromUtf8(machine_config_file), QSettings::IniFormat);
 	settings.clear();
 
 	char s[256];
 
-	sprintf(s, "%u", config->mem_size);
-	settings.setValue("mem_size", s);
+	snprintf(s, sizeof(s), "%u", config->mem_size);
+	settings.setValue("mem_size", QString::fromUtf8(s));
 
-	sprintf(s, "%s", models[machine.model].name_config);
-	settings.setValue("model", s);
+	snprintf(s, sizeof(s), "%s", models[machine.model].name_config);
+	settings.setValue("model", QString::fromUtf8(s));
 
 	if (config->vram_size == 16) {
 		settings.setValue("vram_size", "16");
@@ -287,36 +287,36 @@ config_save(Config *config)
 	settings.setValue("refresh_rate",    config->refresh);
 	settings.setValue("cdrom_enabled",   config->cdromenabled);
 	settings.setValue("cdrom_type",      config->cdromtype);
-	settings.setValue("cdrom_iso",       config->isoname);
+	settings.setValue("cdrom_iso",       QString::fromUtf8(config->isoname));
 	settings.setValue("mouse_following", config->mousehackon);
 	settings.setValue("mouse_twobutton", config->mousetwobutton);
 
 
 	switch (config->network_type) {
-	case NetworkType_Off:              sprintf(s, "off"); break;
-	case NetworkType_NAT:              sprintf(s, "nat"); break;
-	case NetworkType_EthernetBridging: sprintf(s, "ethernetbridging"); break;
-	case NetworkType_IPTunnelling:     sprintf(s, "iptunnelling"); break;
+	case NetworkType_Off:              snprintf(s, sizeof(s), "off"); break;
+	case NetworkType_NAT:              snprintf(s, sizeof(s), "nat"); break;
+	case NetworkType_EthernetBridging: snprintf(s, sizeof(s), "ethernetbridging"); break;
+	case NetworkType_IPTunnelling:     snprintf(s, sizeof(s), "iptunnelling"); break;
 	}
-	settings.setValue("network_type", s);
+	settings.setValue("network_type", QString::fromUtf8(s));
 
 	if (config->username) {
-		settings.setValue("username", config->username);
+		settings.setValue("username", QString::fromUtf8(config->username));
 	} else {
 		settings.setValue("username", "");
 	}
 	if (config->ipaddress) {
-		settings.setValue("ipaddress", config->ipaddress);
+		settings.setValue("ipaddress", QString::fromUtf8(config->ipaddress));
 	} else {
 		settings.setValue("ipaddress", "");
 	}
 	if (config->macaddress) {
-		settings.setValue("macaddress", config->macaddress);
+		settings.setValue("macaddress", QString::fromUtf8(config->macaddress));
 	} else {
 		settings.setValue("macaddress", "");
 	}
 	if (config->bridgename) {
-		settings.setValue("bridgename", config->bridgename);
+		settings.setValue("bridgename", QString::fromUtf8(config->bridgename));
 	} else {
 		settings.setValue("bridgename", "");
 	}
@@ -325,7 +325,7 @@ config_save(Config *config)
 	settings.setValue("show_fullscreen_message", config->show_fullscreen_message);
 
 	if (config->network_capture) {
-		settings.setValue("network_capture", config->network_capture);
+		settings.setValue("network_capture", QString::fromUtf8(config->network_capture));
 	}
 
 	config_nat_rules_save(settings);

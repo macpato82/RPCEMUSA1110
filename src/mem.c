@@ -76,6 +76,9 @@ void mem_init(void)
 {
 	rom  = malloc(ROMSIZE);
 	vram = malloc(16 * 1024 * 1024); /* 16MB VRAM (max for the 0x02000000 window) */
+	if (rom == NULL || vram == NULL) {
+		fatal("mem_init: out of memory allocating ROM/VRAM");
+	}
 	romb  = (uint8_t *) rom;
 	vramb = (uint8_t *) vram;
 }
@@ -101,6 +104,9 @@ mem_reset(uint32_t ramsize, uint32_t vram_size)
 
 		/* Allocate additional 128MB */
 		ram1 = realloc(ram1, 128 * 1024 * 1024);
+		if (ram1 == NULL) {
+			fatal("mem_reset: out of memory allocating 128MB second SIMM");
+		}
 		ramb1 = (uint8_t *) ram1;
 		memset(ram1, 0, 128 * 1024 * 1024);
 	} else {
@@ -121,6 +127,9 @@ mem_reset(uint32_t ramsize, uint32_t vram_size)
 
 	ram00 = realloc(ram00, ramsize / 2);
 	ram01 = realloc(ram01, ramsize / 2);
+	if (ram00 == NULL || ram01 == NULL) {
+		fatal("mem_reset: out of memory allocating %u MB RAM", ramsize / (1024 * 1024));
+	}
 	ramb00 = (uint8_t *) ram00;
 	ramb01 = (uint8_t *) ram01;
 	memset(ram00, 0, ramsize / 2);

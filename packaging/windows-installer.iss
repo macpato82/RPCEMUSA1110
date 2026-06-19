@@ -32,7 +32,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Files]
 ; Everything that was staged for the portable build (exe, DLLs, plugins,
 ; roms\RISCPC.ROM, configs, poduleroms, resources, docs).
-Source: "dist\rpcemu-windows\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; Path is relative to this .iss file (in packaging/), so go up to the repo root.
+Source: "..\dist\rpcemu-windows\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\RPCEmu"; Filename: "{app}\RPCEmu-Interpreter.exe"; WorkingDir: "{app}"

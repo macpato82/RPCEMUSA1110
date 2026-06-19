@@ -24,6 +24,14 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifdef __APPLE__
+#include <limits.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <libgen.h>
+#include <mach-o/dyld.h>
+#endif
+
 #include <iostream>
 
 #include <QApplication>
@@ -445,12 +453,28 @@ rpcemu_nsec_timer_ticks(void)
  * @param argc command line arguments
  * @param argv command line arguments
  */ 
-int main (int argc, char ** argv) 
-{ 
+int main (int argc, char ** argv)
+{
 //	if (argc != 1) {
 //		fprintf(stderr, "No command line options supported.\n");
 //		return 1;
 //	}
+
+#ifdef __APPLE__
+	// The data dir is resolved relative to the working directory ("./"), but a
+	// .app launched from Finder starts with cwd "/". The support data (roms,
+	// configs, ...) is bundled next to the executable in Contents/MacOS, so
+	// change to the executable's directory before anything loads data.
+	{
+		char exe_path[PATH_MAX];
+		uint32_t exe_size = sizeof(exe_path);
+		if (_NSGetExecutablePath(exe_path, &exe_size) == 0) {
+			if (chdir(dirname(exe_path)) != 0) {
+				/* non-fatal: fall back to the inherited cwd */
+			}
+		}
+	}
+#endif
 
 	// Keyboard handling (keyboard_x.c) maps QKeyEvent::nativeScanCode() through
 	// a table of X11 keycodes. Under the Qt 6 Wayland platform nativeScanCode()

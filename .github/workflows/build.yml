@@ -135,20 +135,25 @@ jobs:
           qmake rpcemu.pro
           make -j3
 
-      - name: Bundle .app
+      - name: Bundle + package .app
         run: |
           export PATH="$(brew --prefix qt@5)/bin:$PATH"
-          ls -la *.app 2>/dev/null || ls -la
-          macdeployqt rpcemu-interpreter.app || true
-          mkdir -p dist/rpcemu-macos
-          cp -R rpcemu-interpreter.app dist/rpcemu-macos/ 2>/dev/null || true
-          cp -r configs roms poduleroms resources dist/rpcemu-macos/ 2>/dev/null || true
-          cp README.md COPYING dist/rpcemu-macos/ 2>/dev/null || true
+          APP=rpcemu-interpreter.app
+          macdeployqt "$APP" || true
+          # Bundle the support data (incl. the RISC OS 5 ROM) next to the binary
+          # inside the .app; main() chdir's here on launch so "./roms" resolves.
+          cp -r configs roms poduleroms resources "$APP/Contents/MacOS/" 2>/dev/null || true
+          cp README.md COPYING "$APP/Contents/MacOS/" 2>/dev/null || true
+          # Archive ON macOS with ditto so the bundle's symlinks and exec bits
+          # survive (a Linux re-zip of an artifact corrupts the .app).
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" dist/rpcemu-macos-arm64.zip
+          ls -lh dist/rpcemu-macos-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: rpcemu-macos-arm64
-          path: dist/rpcemu-macos
+          path: dist/rpcemu-macos-arm64.zip
 
   # ----------------------------------------------- Release (on version tag) --
   release:
@@ -167,10 +172,11 @@ jobs:
           cd artifacts
           for d in */; do
             name="${d%/}"
-            # Attach Windows installers directly; zip the portable folders.
-            exe="$(find "$name" -maxdepth 1 -iname '*Setup*.exe' | head -1)"
-            if [ -n "$exe" ]; then
-              cp "$exe" "../$(basename "$exe")"
+            # Attach any pre-built installer/archive (Windows .exe, macOS .zip)
+            # directly; only zip artifacts that are plain folders (Linux).
+            asset="$(find "$name" -maxdepth 1 \( -iname '*.exe' -o -iname '*.zip' \) | head -1)"
+            if [ -n "$asset" ]; then
+              cp "$asset" "../$(basename "$asset")"
             else
               zip -r "../${name}.zip" "$name" >/dev/null
             fi

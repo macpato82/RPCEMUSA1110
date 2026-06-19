@@ -298,8 +298,10 @@ get_broadcast_address(struct in_addr *bcast, struct in_addr *host)
         }
 
         /* Get broadcast address */
-        if (ifa->ifa_ifu.ifu_broadaddr != NULL) {
-            struct sockaddr_in *bcast_sa = (struct sockaddr_in *)ifa->ifa_ifu.ifu_broadaddr;
+        /* ifa_broadaddr: a glibc macro for ifa_ifu.ifu_broadaddr on Linux, a
+           direct struct member on BSD/macOS - portable across both. */
+        if (ifa->ifa_broadaddr != NULL) {
+            struct sockaddr_in *bcast_sa = (struct sockaddr_in *)ifa->ifa_broadaddr;
             struct sockaddr_in *host_sa = (struct sockaddr_in *)ifa->ifa_addr;
 
             *bcast = bcast_sa->sin_addr;

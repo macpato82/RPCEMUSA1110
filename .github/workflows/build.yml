@@ -63,7 +63,10 @@ jobs:
       - name: Build (qmake, interpreter)
         working-directory: src/qt5
         run: |
-          qmake rpcemu.pro
+          export PATH="/mingw64/bin:$PATH"
+          QMAKE="$(command -v qmake || command -v qmake-qt5 || echo /mingw64/bin/qmake)"
+          echo "Using qmake: $QMAKE"; "$QMAKE" --version
+          "$QMAKE" rpcemu.pro
           mingw32-make -j2
 
       - name: Bundle Qt runtime

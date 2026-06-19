@@ -19,6 +19,9 @@ hostfs-riscos4/
 *.adf
 *.hfe
 *.hdf
+# ...but the blank disc templates embedded as Qt resources are part of the build
+!src/qt5/resources/*.adf
+!src/qt5/resources/*.hfe
 cmos.ram
 cmos.ram.bak
 cmos-riscos4.ram

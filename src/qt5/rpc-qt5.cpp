@@ -469,7 +469,10 @@ int main (int argc, char ** argv)
 		char exe_path[PATH_MAX];
 		uint32_t exe_size = sizeof(exe_path);
 		if (_NSGetExecutablePath(exe_path, &exe_size) == 0) {
-			if (chdir(dirname(exe_path)) != 0) {
+			// exe is in Contents/MacOS; the data lives in Contents/Resources.
+			char data_dir[PATH_MAX];
+			snprintf(data_dir, sizeof(data_dir), "%s/../Resources", dirname(exe_path));
+			if (chdir(data_dir) != 0) {
 				/* non-fatal: fall back to the inherited cwd */
 			}
 		}

@@ -140,12 +140,16 @@ jobs:
           export PATH="$(brew --prefix qt@5)/bin:$PATH"
           APP=rpcemu-interpreter.app
           macdeployqt "$APP" || true
-          # Bundle the support data (incl. the RISC OS 5 ROM) next to the binary
-          # inside the .app; main() chdir's here on launch so "./roms" resolves.
-          cp -r configs roms poduleroms resources "$APP/Contents/MacOS/" 2>/dev/null || true
-          cp README.md COPYING "$APP/Contents/MacOS/" 2>/dev/null || true
-          # Archive ON macOS with ditto so the bundle's symlinks and exec bits
-          # survive (a Linux re-zip of an artifact corrupts the .app).
+          # Bundle the support data (incl. the RISC OS 5 ROM) in Contents/Resources;
+          # main() chdir's there on launch so "./roms" resolves.
+          mkdir -p "$APP/Contents/Resources"
+          cp -r configs roms poduleroms resources "$APP/Contents/Resources/" 2>/dev/null || true
+          cp README.md COPYING "$APP/Contents/Resources/" 2>/dev/null || true
+          # Ad-hoc code-sign the FINAL bundle (after all edits). On Apple Silicon
+          # an unsigned/broken-signature bundle reports "damaged" once quarantined.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose "$APP" || true
+          # Archive ON macOS with ditto so symlinks/exec bits/signature survive.
           mkdir -p dist
           ditto -c -k --keepParent "$APP" dist/rpcemu-macos-arm64.zip
           ls -lh dist/rpcemu-macos-arm64.zip

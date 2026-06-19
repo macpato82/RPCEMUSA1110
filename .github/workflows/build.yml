@@ -88,12 +88,16 @@ jobs:
           # freetype, zlib, glib, icu, ...) that windeployqt does NOT bundle.
           # ldd resolves PE imports transitively.
           copy_deps() {
-            ldd "$1" 2>/dev/null | awk '/=>/ {print $3}' | grep -i '/mingw64/' | while read -r p; do
+            local deps
+            deps="$(ldd "$1" 2>/dev/null | awk '/=>/ {print $3}' | grep -i '/mingw64/' || true)"
+            for p in $deps; do
               cp -u "$p" "$APPDIR/" 2>/dev/null || true
             done
           }
           copy_deps "$EXE"
-          for d in $(find "$APPDIR" -name '*.dll'); do copy_deps "$d"; done
+          for d in "$APPDIR"/*.dll "$APPDIR"/platforms/*.dll; do
+            [ -f "$d" ] && copy_deps "$d"
+          done
           # Data, including the redistributable RISC OS 5 ROM
           cp -r configs roms poduleroms resources "$APPDIR/" 2>/dev/null || true
           cp README.md COPYING "$APPDIR/" 2>/dev/null || true

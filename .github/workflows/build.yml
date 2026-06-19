@@ -70,27 +70,48 @@ jobs:
           "$QMAKE" rpcemu.pro
           mingw32-make -j2
 
-      - name: Bundle Qt runtime
+      - name: Bundle app (full DLL closure + RISC OS 5 ROM)
         run: |
           export PATH="/mingw64/bin:$PATH"
-          mkdir -p dist/rpcemu-windows
-          cp RPCEmu-Interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp rpcemu-interpreter.exe dist/rpcemu-windows/
+          APPDIR=dist/rpcemu-windows
+          mkdir -p "$APPDIR"
+          cp RPCEmu-Interpreter.exe "$APPDIR/" 2>/dev/null || cp rpcemu-interpreter.exe "$APPDIR/"
+          EXE="$(ls "$APPDIR"/*.exe | head -1)"
+          # Qt plugins (platforms, imageformats, audio, styles). Tolerate the
+          # optional ANGLE/libGLESv2 step failing on this desktop-OpenGL Qt5.
           WINDEPLOYQT="$(command -v windeployqt-qt5 || command -v windeployqt)"
-          echo "Using: $WINDEPLOYQT"
-          # Tolerate the optional libGLESv2.dll copy failing: this desktop-OpenGL
-          # Qt5 build doesn't ship ANGLE, and the essential DLLs/plugins are
-          # deployed before windeployqt reaches the GL runtime stage.
-          "$WINDEPLOYQT" --release --no-translations dist/rpcemu-windows/*.exe || true
-          # Belt-and-braces: make sure the Windows platform plugin is present.
-          mkdir -p dist/rpcemu-windows/platforms
-          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll dist/rpcemu-windows/platforms/ 2>/dev/null || true
-          cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
-          cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
+          "$WINDEPLOYQT" --release --no-translations --no-opengl-sw "$EXE" || true
+          mkdir -p "$APPDIR/platforms"
+          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll "$APPDIR/platforms/" 2>/dev/null || true
+          # Copy the full transitive DLL closure - the MinGW runtime (libgcc,
+          # libstdc++, libwinpthread) and 3rd-party libs (pcre2, harfbuzz, png,
+          # freetype, zlib, glib, icu, ...) that windeployqt does NOT bundle.
+          # ldd resolves PE imports transitively.
+          copy_deps() {
+            ldd "$1" 2>/dev/null | awk '/=>/ {print $3}' | grep -i '/mingw64/' | while read -r p; do
+              cp -u "$p" "$APPDIR/" 2>/dev/null || true
+            done
+          }
+          copy_deps "$EXE"
+          for d in $(find "$APPDIR" -name '*.dll'); do copy_deps "$d"; done
+          # Data, including the redistributable RISC OS 5 ROM
+          cp -r configs roms poduleroms resources "$APPDIR/" 2>/dev/null || true
+          cp README.md COPYING "$APPDIR/" 2>/dev/null || true
+          echo "Bundled $(ls "$APPDIR"/*.dll 2>/dev/null | wc -l) DLLs"
+          ls -la "$APPDIR/roms/RISCPC.ROM" || echo "WARNING: ROM missing!"
+
+      - name: Build self-contained installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows-installer.iss
+          New-Item -ItemType Directory -Force -Path dist\installer | Out-Null
+          Copy-Item packaging\RPCEmu-SA1110-Setup.exe dist\installer\
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rpcemu-windows-x86_64
-          path: dist/rpcemu-windows
+          name: rpcemu-windows-installer
+          path: dist/installer
 
   # ---------------------------------------------------------------- macOS ----
   macos:

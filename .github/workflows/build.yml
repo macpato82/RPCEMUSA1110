@@ -76,7 +76,13 @@ jobs:
           cp RPCEmu-Interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp rpcemu-interpreter.exe dist/rpcemu-windows/
           WINDEPLOYQT="$(command -v windeployqt-qt5 || command -v windeployqt)"
           echo "Using: $WINDEPLOYQT"
-          "$WINDEPLOYQT" --release --no-translations dist/rpcemu-windows/*.exe
+          # Tolerate the optional libGLESv2.dll copy failing: this desktop-OpenGL
+          # Qt5 build doesn't ship ANGLE, and the essential DLLs/plugins are
+          # deployed before windeployqt reaches the GL runtime stage.
+          "$WINDEPLOYQT" --release --no-translations dist/rpcemu-windows/*.exe || true
+          # Belt-and-braces: make sure the Windows platform plugin is present.
+          mkdir -p dist/rpcemu-windows/platforms
+          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll dist/rpcemu-windows/platforms/ 2>/dev/null || true
           cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
           cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
 

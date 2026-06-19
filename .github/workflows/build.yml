@@ -71,9 +71,10 @@ jobs:
 
       - name: Bundle Qt runtime
         run: |
+          export PATH="/mingw64/bin:$PATH"
           mkdir -p dist/rpcemu-windows
-          cp rpcemu-interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp RPCEmu-Interpreter.exe dist/rpcemu-windows/
-          windeployqt --release --no-translations dist/rpcemu-windows/*.exe
+          cp RPCEmu-Interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp rpcemu-interpreter.exe dist/rpcemu-windows/
+          /mingw64/bin/windeployqt.exe --release --no-translations dist/rpcemu-windows/*.exe
           cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
           cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
 

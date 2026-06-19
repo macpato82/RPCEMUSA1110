@@ -90,3 +90,36 @@ jobs:
         with:
           name: rpcemu-windows-x86_64
           path: dist/rpcemu-windows
+
+  # ---------------------------------------------------------------- macOS ----
+  macos:
+    runs-on: macos-latest
+    name: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 5
+        run: brew install qt@5
+
+      # Interpreter build: the dynarec is x86-only (no use on Apple Silicon).
+      - name: Build (qmake, interpreter)
+        working-directory: src/qt5
+        run: |
+          export PATH="$(brew --prefix qt@5)/bin:$PATH"
+          qmake rpcemu.pro
+          make -j3
+
+      - name: Bundle .app
+        run: |
+          export PATH="$(brew --prefix qt@5)/bin:$PATH"
+          ls -la *.app 2>/dev/null || ls -la
+          macdeployqt rpcemu-interpreter.app || true
+          mkdir -p dist/rpcemu-macos
+          cp -R rpcemu-interpreter.app dist/rpcemu-macos/ 2>/dev/null || true
+          cp -r configs roms poduleroms resources dist/rpcemu-macos/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-macos/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-macos-arm64
+          path: dist/rpcemu-macos

@@ -23,8 +23,15 @@
 
 #include <iostream>
 
+#include <QtGlobal>
 #include <QAudioFormat>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QAudioDevice>
+#include <QMediaDevices>
+#else
+#include <QAudioDeviceInfo>
 #include <QAudioOutput>
+#endif
 #include <QFile>
 #include <QThread>
 
@@ -54,6 +61,14 @@ AudioOut::AudioOut(uint32_t bufferlen)
 	this->samplerate = 0;
 
 	// Output some information to the log
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	// Qt 6 dropped the per-codec / supported-sample-rate enumeration on the
+	// device; report the device name and its sample-rate range instead.
+	QAudioDevice info(QMediaDevices::defaultAudioOutput());
+	rpclog("plt_sound: qt6 Audio Device: %s\n", info.description().toLocal8Bit().constData());
+	rpclog("plt_sound: qt6 Audio SampleRate range: %d - %d Hz\n",
+	       info.minimumSampleRate(), info.maximumSampleRate());
+#else
 	QAudioDeviceInfo info(QAudioDeviceInfo::defaultOutputDevice());
 	rpclog("plt_sound: qt5 Audio Device: %s\n", info.deviceName().toLocal8Bit().constData());
 
@@ -68,6 +83,7 @@ AudioOut::AudioOut(uint32_t bufferlen)
 	for(int i = 0; i < samprates.size(); i++) {
 		rpclog("%d: %d\n", i, samprates.at(i));
 	}
+#endif
 }
 
 AudioOut::~AudioOut()
@@ -95,14 +111,20 @@ AudioOut::changeSampleRate(uint32_t samplerate)
 	// Set the format
 	format.setSampleRate(samplerate);
 	format.setChannelCount(2);         // Stereo
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	// Qt 6: a single sample-format enum replaces size/type/codec/byte-order.
+	// Raw PCM has no codec, and samples are always host byte order.
+	format.setSampleFormat(QAudioFormat::Int16); // 16 bit signed sound
+#else
 	format.setSampleSize(16);          // 16 bit sound
 	format.setCodec("audio/pcm");
 	format.setByteOrder(QAudioFormat::LittleEndian);
 	format.setSampleType(QAudioFormat::SignedInt);
+#endif
 
-	audio_output = new QAudioOutput(format);
+	audio_output = new RpcAudioSink(format);
 	if(QAudio::NoError != audio_output->error()) {
-		error("plt_sound: Failed to create QAudioOutput, no audio\n");
+		error("plt_sound: Failed to create audio output, no audio\n");
 		delete audio_output;
 		audio_output = NULL;
 		return;
@@ -114,7 +136,9 @@ AudioOut::changeSampleRate(uint32_t samplerate)
 		rpclog("plt_sound: Tried to set sample rate %uHz but was given %dHz, audio may be distorted\n", samplerate, checkFormat.sampleRate());
 	}
 
-	audio_output->setCategory("RPCEmu"); // String used in OS Mixer
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+	audio_output->setCategory("RPCEmu"); // String used in OS Mixer (Qt 5 only)
+#endif
 
 	if(config.soundenabled) {
 		audio_output->setVolume(1.0f);

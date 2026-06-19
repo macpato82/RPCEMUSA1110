@@ -12,6 +12,7 @@
 #include "mem.h"
 #include "network.h"
 #include "network-nat.h"
+#include "broadcast_relay.h"
 #include "podules.h"
 
 #include "slirp/libslirp.h"
@@ -200,6 +201,11 @@ network_nat_init(void)
 
 	network_nat_open();
 
+	// Access+/ShareFS broadcast relay (re-init cleanly if called again).
+	// Failure is non-fatal: NAT still works, just without LAN ShareFS.
+	broadcast_relay_close();
+	broadcast_relay_init();
+
 	// Open capture file if requested
 	if (config.network_capture != NULL) {
 		if ((nat.capture = fopen(config.network_capture, "wb")) != NULL) {
@@ -246,6 +252,9 @@ network_nat_poll(void)
 	}
 
 	slirp_select_poll(nat.slirp, &rfds, &wfds, &efds, ret <= 0);
+
+	// Deliver any Access+/ShareFS packets arriving from the host LAN
+	broadcast_relay_poll();
 }
 
 /**
@@ -297,9 +306,42 @@ network_nat_tx(uint32_t errbuf, uint32_t mbufs, uint32_t dest, uint32_t src, uin
 	// Write to capture file for debug
 	write_packet(nat.capture, nat.buffer, packet_length);
 
+	// Offer the frame to the Access+/ShareFS broadcast relay first. It relays
+	// Access+ broadcasts/unicasts to the host LAN; SLiRP still sees the frame.
+	broadcast_relay_tx(nat.buffer, packet_length);
+
 	slirp_input(nat.slirp, nat.buffer, packet_length);
 
 	return 0;
+}
+
+/**
+ * Inject a raw Ethernet frame into the guest's receive path. Mirrors the
+ * delivery slirp_output() performs. As there is only a single receive buffer
+ * (no queue), the frame is dropped if the buffer is still busy - acceptable
+ * for the rate-limited Access+ relay, which retries.
+ */
+int
+network_nat_inject_packet(const uint8_t *pkt, int pkt_len)
+{
+	if (nat.irq_status == 0 || network_poduleinfo == NULL) {
+		return 0; // networking not set up to receive
+	}
+
+	if (pkt_len < 0 || (size_t) pkt_len > sizeof(nat.buffer)) {
+		return 0;
+	}
+
+	if (nat.buffer_len != 0) {
+		return 0; // receive buffer busy - drop (relay will retry)
+	}
+
+	memcpy(nat.buffer, pkt, (size_t) pkt_len);
+	nat.buffer_len = pkt_len;
+	write_packet(nat.capture, pkt, pkt_len);
+	network_irq_raise();
+
+	return 1;
 }
 
 /**

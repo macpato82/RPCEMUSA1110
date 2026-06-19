@@ -9,12 +9,22 @@ roms/*
 # hostfs/ holds a full RISC OS environment (copyrighted OS + applications).
 hostfs/
 
+# Second machine: RISC OS 4 (Adjust). The 4.39 ROM is proprietary (NOT
+# redistributable) and its HostFS is a full copyrighted RISC OS environment.
+roms-riscos4/*
+!roms-riscos4/roms.txt
+hostfs-riscos4/
+
 # Disc images / machine state (user data, may be copyrighted)
 *.adf
 *.hfe
 *.hdf
+# ...but the blank disc templates embedded as Qt resources are part of the build
+!src/qt5/resources/*.adf
+!src/qt5/resources/*.hfe
 cmos.ram
 cmos.ram.bak
+cmos-riscos4.ram
 
 # Build artifacts
 rpcemu-interpreter
@@ -35,7 +45,17 @@ src/qt5/Makefile.Debug
 src/qt5/Makefile.Release
 src/qt5/release/
 src/qt5/debug/
+# CMake build trees
+build/
+build-cmake/
+CMakeCache.txt
+CMakeFiles/
 
 # Logs / temp
 rpclog.txt
 rpc.cfg
+rpc-riscos4.cfg
+rpcemu-gui.ini
+
+# Local launcher icon (copyrighted RISC OS art - not for the public repo)
+rpcemu-switcher-icon.png

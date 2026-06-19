@@ -1,0 +1,153 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------- Linux ----
+  linux:
+    runs-on: ubuntu-latest
+    name: linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake \
+            qt6-base-dev qt6-multimedia-dev libgl1-mesa-dev
+
+      - name: Build (CMake, Qt6, dynarec)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRPCEMU_DYNAREC=ON
+          cmake --build build -j"$(nproc)"
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist/rpcemu-linux
+          cp rpcemu-recompiler dist/rpcemu-linux/
+          cp -r configs roms poduleroms resources dist/rpcemu-linux/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-linux/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-linux-x86_64
+          path: dist/rpcemu-linux
+
+  # -------------------------------------------------------------- Windows ----
+  windows:
+    runs-on: windows-latest
+    name: windows-x86_64
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-qt5-multimedia
+            mingw-w64-x86_64-qt5-tools
+
+      # Interpreter build: the x86 dynarec targets the SysV ABI, not Win64.
+      - name: Build (qmake, interpreter)
+        working-directory: src/qt5
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          QMAKE="$(command -v qmake || command -v qmake-qt5 || echo /mingw64/bin/qmake)"
+          echo "Using qmake: $QMAKE"; "$QMAKE" --version
+          "$QMAKE" rpcemu.pro
+          mingw32-make -j2
+
+      - name: Bundle Qt runtime
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          mkdir -p dist/rpcemu-windows
+          cp RPCEmu-Interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp rpcemu-interpreter.exe dist/rpcemu-windows/
+          WINDEPLOYQT="$(command -v windeployqt-qt5 || command -v windeployqt)"
+          echo "Using: $WINDEPLOYQT"
+          # Tolerate the optional libGLESv2.dll copy failing: this desktop-OpenGL
+          # Qt5 build doesn't ship ANGLE, and the essential DLLs/plugins are
+          # deployed before windeployqt reaches the GL runtime stage.
+          "$WINDEPLOYQT" --release --no-translations dist/rpcemu-windows/*.exe || true
+          # Belt-and-braces: make sure the Windows platform plugin is present.
+          mkdir -p dist/rpcemu-windows/platforms
+          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll dist/rpcemu-windows/platforms/ 2>/dev/null || true
+          cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-windows-x86_64
+          path: dist/rpcemu-windows
+
+  # ---------------------------------------------------------------- macOS ----
+  macos:
+    runs-on: macos-latest
+    name: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 5
+        run: brew install qt@5
+
+      # Interpreter build: the dynarec is x86-only (no use on Apple Silicon).
+      - name: Build (qmake, interpreter)
+        working-directory: src/qt5
+        run: |
+          export PATH="$(brew --prefix qt@5)/bin:$PATH"
+          qmake rpcemu.pro
+          make -j3
+
+      - name: Bundle .app
+        run: |
+          export PATH="$(brew --prefix qt@5)/bin:$PATH"
+          ls -la *.app 2>/dev/null || ls -la
+          macdeployqt rpcemu-interpreter.app || true
+          mkdir -p dist/rpcemu-macos
+          cp -R rpcemu-interpreter.app dist/rpcemu-macos/ 2>/dev/null || true
+          cp -r configs roms poduleroms resources dist/rpcemu-macos/ 2>/dev/null || true
+          cp README.md COPYING dist/rpcemu-macos/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpcemu-macos-arm64
+          path: dist/rpcemu-macos
+
+  # ----------------------------------------------- Release (on version tag) --
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ linux, windows, macos ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package per-platform archives
+        run: |
+          cd artifacts
+          for d in */; do
+            name="${d%/}"
+            zip -r "../${name}.zip" "$name" >/dev/null
+          done
+          ls -l ../*.zip
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true

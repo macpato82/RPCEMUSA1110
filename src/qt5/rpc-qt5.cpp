@@ -27,6 +27,8 @@
 #include <iostream>
 
 #include <QApplication>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QScreen>
 #include <QtCore>
 
@@ -450,12 +452,76 @@ int main (int argc, char ** argv)
 //		return 1;
 //	}
 
+	// Keyboard handling (keyboard_x.c) maps QKeyEvent::nativeScanCode() through
+	// a table of X11 keycodes. Under the Qt 6 Wayland platform nativeScanCode()
+	// does not yield those values and the keyboard stops working. When an X
+	// display is available (real X11 or XWayland) prefer the xcb platform so
+	// native scan codes are X11 keycodes, matching Qt 5's behaviour. (On a pure
+	// Wayland system with no X display we leave the default and rely on the
+	// evdev->X11 +8 adjustment in main_window.cpp.)
+	if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") &&
+	    !qEnvironmentVariableIsEmpty("DISPLAY")) {
+		qputenv("QT_QPA_PLATFORM", "xcb");
+	}
+
 	// Initialise QT app
 	QApplication app(argc, argv);
 
+	rpclog("GUI: Qt platform '%s'\n",
+	       QApplication::platformName().toLocal8Bit().constData());
+
 	// Add a program icon
 	QApplication::setWindowIcon(QIcon(":/rpcemu_icon.png"));
-	
+
+	// Machine selection: choose which RISC OS version to run. Each machine has
+	// its own ROM set, HostFS and CMOS. This is decided before the emulator
+	// system is initialised, so the choice is in effect when ROMs/HostFS/CMOS
+	// load. A command-line flag (--riscos4 / --riscos5) picks a machine
+	// directly and skips the dialog (useful for per-machine launchers);
+	// otherwise the user is asked.
+	{
+		bool machine_chosen = false;
+
+		for (int i = 1; i < argc; i++) {
+			if (strcmp(argv[i], "--riscos4") == 0) {
+				machine_config_file = "rpc-riscos4.cfg";
+				machine_rom_dir    = "roms-riscos4";
+				machine_hostfs_dir = "hostfs-riscos4";
+				machine_cmos_file  = "cmos-riscos4.ram";
+				machine_hd4_file   = "hd4-riscos4.hdf";
+				machine_hd5_file   = "hd5-riscos4.hdf";
+				machine_chosen = true;
+			} else if (strcmp(argv[i], "--riscos5") == 0) {
+				// Defaults already point at the RISC OS 5 machine
+				machine_chosen = true;
+			}
+		}
+
+		if (!machine_chosen) {
+			QMessageBox box;
+			box.setWindowTitle("RPCEmu - Select Machine");
+			box.setIcon(QMessageBox::Question);
+			box.setText("Which version of RISC OS would you like to run?");
+			QPushButton *ros5_button = box.addButton("RISC OS 5", QMessageBox::AcceptRole);
+			QPushButton *ros4_button = box.addButton("RISC OS 4", QMessageBox::AcceptRole);
+			box.addButton(QMessageBox::Cancel);
+			box.setDefaultButton(ros5_button);
+			box.exec();
+
+			if (box.clickedButton() == ros4_button) {
+				machine_config_file = "rpc-riscos4.cfg";
+				machine_rom_dir    = "roms-riscos4";
+				machine_hostfs_dir = "hostfs-riscos4";
+				machine_cmos_file  = "cmos-riscos4.ram";
+				machine_hd4_file   = "hd4-riscos4.hdf";
+				machine_hd5_file   = "hd5-riscos4.hdf";
+			} else if (box.clickedButton() != ros5_button) {
+				// Cancelled or closed - quit before starting the emulator
+				return 0;
+			}
+		}
+	}
+
 	// start enough of the emulator system to allow
 	// the GUI to initialise (e.g. load the config to init
 	// the configure window)

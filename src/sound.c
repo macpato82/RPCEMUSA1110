@@ -149,6 +149,13 @@ sound_irq_update(void)
 		ramp = ram00;
 	}
 
+	/* The second SIMM (ram1) is only allocated on 256MB configs; if a
+	   sound DMA descriptor points at an unpopulated bank, skip the copy
+	   rather than dereferencing a NULL pointer. */
+	if (ramp == NULL) {
+		return;
+	}
+
         for (c = start; c < end; c += 4)
         {
                 temp = ramp[((c + page) & mem_rammask) >> 2];

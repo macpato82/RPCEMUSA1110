@@ -22,8 +22,15 @@
 
 #include <stdint.h>
 
+#include <QtGlobal>
 #include <QAudioFormat>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QAudioSink>
+typedef QAudioSink RpcAudioSink; /**< Qt 6 renamed QAudioOutput to QAudioSink */
+#else
 #include <QAudioOutput>
+typedef QAudioOutput RpcAudioSink;
+#endif
 #include <QFile>
 #include <QObject>
 #include <QEventLoop>
@@ -37,7 +44,7 @@ public:
 	virtual ~AudioOut();
 	void changeSampleRate(uint32_t samplerate);
 
-	QAudioOutput *audio_output;
+	RpcAudioSink *audio_output;
 	QIODevice *audio_io;
 	uint32_t samplerate;
 	uint32_t bufferlen;

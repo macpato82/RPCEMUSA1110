@@ -73,12 +73,14 @@ SOURCES =	../superio.c \
 		about_dialog.cpp \
 		plt_sound.cpp
 
-# NAT Networking
-linux | win32 {
+# NAT Networking (SLiRP) - portable, used on Linux, macOS and Windows
+unix | win32 {
 	HEADERS +=	../network-nat.h \
+			../broadcast_relay.h \
 			nat_edit_dialog.h \
 			nat_list_dialog.h
 	SOURCES += 	../network-nat.c \
+			../broadcast_relay.c \
 			nat_edit_dialog.cpp \
 			nat_list_dialog.cpp
 
@@ -153,6 +155,15 @@ linux {
 	SOURCES +=	../cdrom-linuxioctl.c \
 			../network-linux.c \
 			../network.c \
+			network_dialog.cpp
+	HEADERS +=	../network.h \
+			network_dialog.h
+}
+
+macx {
+	# macOS: NAT networking only (bridging/tunnelling are Linux-specific)
+	SOURCES +=	../network.c \
+			../network-mac.c \
 			network_dialog.cpp
 	HEADERS +=	../network.h \
 			network_dialog.h

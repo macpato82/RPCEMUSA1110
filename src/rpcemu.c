@@ -65,6 +65,15 @@ char discname[2][260]={"boot.adf","notboot.adf"};
 
 Machine machine; /**< The details of the current machine being emulated */
 
+/* Selected machine's data locations; default to the RISC OS 5 machine.
+   Overridden by the startup machine selector (see rpc-qt5.cpp). */
+const char *machine_config_file = "rpc.cfg";
+const char *machine_rom_dir    = "roms";
+const char *machine_hostfs_dir = "hostfs";
+const char *machine_cmos_file  = "cmos.ram";
+const char *machine_hd4_file   = "hd4.hdf";
+const char *machine_hd5_file   = "hd5.hdf";
+
 /** Array of details of models the emulator can emulate, must be kept in sync with
     Model enum in rpcemu.h */
 const Model_Details models[] = {
@@ -198,6 +207,9 @@ resetrpc(void)
         mem_reset(config.mem_size, config.vram_size);
         cp15_reset(machine.cpu_model);
 	arm_reset(machine.cpu_model);
+	resetfpa(); /* Initialise FPA state, incl. the FPA system ID in FPSR.
+	               Without this FPSR stays 0 and RISC OS misdetects the FPA -
+	               notably on the A7000+ (ARM7500FE), whose CPU has the FPA. */
         keyboard_reset();
 	iomd_reset(machine.iomd_type);
 

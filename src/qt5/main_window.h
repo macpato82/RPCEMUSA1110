@@ -120,6 +120,7 @@ private slots:
 	void menu_reset();
 	void menu_loaddisc0();
 	void menu_loaddisc1();
+	void menu_open_recent_disc();
 	void menu_create_disc0();
 	void menu_create_disc1();
 	void menu_cdrom_disabled();
@@ -177,7 +178,12 @@ private:
 	void release_held_keys();
 
 	void load_disc(int drive);
+	void load_disc_file(int drive, const QString &fileName);
 	void create_disc(int drive);
+
+	// Recent floppy disc images
+	void add_recent_disc(const QString &fileName);
+	void update_recent_discs_menu();
 
 	bool full_screen;
 	bool reenable_mousehack; ///< Did we disable mousehack entering fullscreen and have to reenable it on leaving fullscreen?
@@ -190,6 +196,7 @@ private:
 	QMenu *file_menu;
 	QMenu *disc_menu;
 	QMenu *floppy_menu;
+	QMenu *recent_menu; ///< Disc->Floppy->Recent submenu
 	QMenu *cdrom_menu;
 	QMenu *settings_menu;
 	QMenu *mouse_menu;
@@ -203,6 +210,8 @@ private:
 	// Actions on Disc menu (and submenus)
 	QAction *loaddisc0_action;
 	QAction *loaddisc1_action;
+	static const int MaxRecentDiscs = 8;
+	QAction *recent_disc_actions[MaxRecentDiscs];
 	QAction *create_disc0_action;
 	QAction *create_disc1_action;
 	QAction *cdrom_disabled_action;

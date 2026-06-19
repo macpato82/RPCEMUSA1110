@@ -185,6 +185,16 @@ extern void rpcemu_nat_forward_remove(PortForwardRule rule);
 
 extern uint32_t inscount;
 
+/* Selected machine's data locations (relative to the data dir). Chosen by the
+   startup machine selector; default to the RISC OS 5 machine. Allows a second
+   machine (e.g. RISC OS 4) with its own ROM set, HostFS and CMOS. */
+extern const char *machine_config_file; /**< config filename, e.g. "rpc.cfg" */
+extern const char *machine_rom_dir;    /**< ROM directory name, e.g. "roms" */
+extern const char *machine_hostfs_dir; /**< HostFS directory name, e.g. "hostfs" */
+extern const char *machine_cmos_file;  /**< CMOS filename, e.g. "cmos.ram" */
+extern const char *machine_hd4_file;   /**< IDE drive 0 image, e.g. "hd4.hdf" */
+extern const char *machine_hd5_file;   /**< IDE drive 1 image, e.g. "hd5.hdf" */
+
 /* These functions can optionally be overridden by a platform. If not
    needed to be overridden, there is a generic version in rpc-machdep.c */
 extern const char *rpcemu_get_datadir(void);

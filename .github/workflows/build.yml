@@ -162,17 +162,25 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package per-platform archives
+      - name: Package release assets
         run: |
           cd artifacts
           for d in */; do
             name="${d%/}"
-            zip -r "../${name}.zip" "$name" >/dev/null
+            # Attach Windows installers directly; zip the portable folders.
+            exe="$(find "$name" -maxdepth 1 -iname '*Setup*.exe' | head -1)"
+            if [ -n "$exe" ]; then
+              cp "$exe" "../$(basename "$exe")"
+            else
+              zip -r "../${name}.zip" "$name" >/dev/null
+            fi
           done
-          ls -l ../*.zip
+          ls -l ../*.zip ../*.exe 2>/dev/null || true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.zip"
+          files: |
+            *.zip
+            *.exe
           generate_release_notes: true

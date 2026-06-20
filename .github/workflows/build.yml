@@ -70,27 +70,52 @@ jobs:
           "$QMAKE" rpcemu.pro
           mingw32-make -j2
 
-      - name: Bundle Qt runtime
+      - name: Bundle app (full DLL closure + RISC OS 5 ROM)
         run: |
           export PATH="/mingw64/bin:$PATH"
-          mkdir -p dist/rpcemu-windows
-          cp RPCEmu-Interpreter.exe dist/rpcemu-windows/ 2>/dev/null || cp rpcemu-interpreter.exe dist/rpcemu-windows/
+          APPDIR=dist/rpcemu-windows
+          mkdir -p "$APPDIR"
+          cp RPCEmu-Interpreter.exe "$APPDIR/" 2>/dev/null || cp rpcemu-interpreter.exe "$APPDIR/"
+          EXE="$(ls "$APPDIR"/*.exe | head -1)"
+          # Qt plugins (platforms, imageformats, audio, styles). Tolerate the
+          # optional ANGLE/libGLESv2 step failing on this desktop-OpenGL Qt5.
           WINDEPLOYQT="$(command -v windeployqt-qt5 || command -v windeployqt)"
-          echo "Using: $WINDEPLOYQT"
-          # Tolerate the optional libGLESv2.dll copy failing: this desktop-OpenGL
-          # Qt5 build doesn't ship ANGLE, and the essential DLLs/plugins are
-          # deployed before windeployqt reaches the GL runtime stage.
-          "$WINDEPLOYQT" --release --no-translations dist/rpcemu-windows/*.exe || true
-          # Belt-and-braces: make sure the Windows platform plugin is present.
-          mkdir -p dist/rpcemu-windows/platforms
-          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll dist/rpcemu-windows/platforms/ 2>/dev/null || true
-          cp -r configs roms poduleroms resources dist/rpcemu-windows/ 2>/dev/null || true
-          cp README.md COPYING dist/rpcemu-windows/ 2>/dev/null || true
+          "$WINDEPLOYQT" --release --no-translations --no-opengl-sw "$EXE" || true
+          mkdir -p "$APPDIR/platforms"
+          cp /mingw64/share/qt5/plugins/platforms/qwindows.dll "$APPDIR/platforms/" 2>/dev/null || true
+          # Copy the full transitive DLL closure - the MinGW runtime (libgcc,
+          # libstdc++, libwinpthread) and 3rd-party libs (pcre2, harfbuzz, png,
+          # freetype, zlib, glib, icu, ...) that windeployqt does NOT bundle.
+          # ldd resolves PE imports transitively.
+          copy_deps() {
+            local deps
+            deps="$(ldd "$1" 2>/dev/null | awk '/=>/ {print $3}' | grep -i '/mingw64/' || true)"
+            for p in $deps; do
+              cp -u "$p" "$APPDIR/" 2>/dev/null || true
+            done
+          }
+          copy_deps "$EXE"
+          for d in "$APPDIR"/*.dll "$APPDIR"/platforms/*.dll; do
+            [ -f "$d" ] && copy_deps "$d"
+          done
+          # Data, including the redistributable RISC OS 5 ROM
+          cp -r configs roms poduleroms resources "$APPDIR/" 2>/dev/null || true
+          cp README.md COPYING "$APPDIR/" 2>/dev/null || true
+          echo "Bundled $(ls "$APPDIR"/*.dll 2>/dev/null | wc -l) DLLs"
+          ls -la "$APPDIR/roms/RISCPC.ROM" || echo "WARNING: ROM missing!"
+
+      - name: Build self-contained installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows-installer.iss
+          New-Item -ItemType Directory -Force -Path dist\installer | Out-Null
+          Copy-Item packaging\RPCEmu-SA1110-Setup.exe dist\installer\
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rpcemu-windows-x86_64
-          path: dist/rpcemu-windows
+          name: rpcemu-windows-installer
+          path: dist/installer
 
   # ---------------------------------------------------------------- macOS ----
   macos:
@@ -110,20 +135,29 @@ jobs:
           qmake rpcemu.pro
           make -j3
 
-      - name: Bundle .app
+      - name: Bundle + package .app
         run: |
           export PATH="$(brew --prefix qt@5)/bin:$PATH"
-          ls -la *.app 2>/dev/null || ls -la
-          macdeployqt rpcemu-interpreter.app || true
-          mkdir -p dist/rpcemu-macos
-          cp -R rpcemu-interpreter.app dist/rpcemu-macos/ 2>/dev/null || true
-          cp -r configs roms poduleroms resources dist/rpcemu-macos/ 2>/dev/null || true
-          cp README.md COPYING dist/rpcemu-macos/ 2>/dev/null || true
+          APP=rpcemu-interpreter.app
+          macdeployqt "$APP" || true
+          # Bundle the support data (incl. the RISC OS 5 ROM) in Contents/Resources;
+          # main() chdir's there on launch so "./roms" resolves.
+          mkdir -p "$APP/Contents/Resources"
+          cp -r configs roms poduleroms resources "$APP/Contents/Resources/" 2>/dev/null || true
+          cp README.md COPYING "$APP/Contents/Resources/" 2>/dev/null || true
+          # Ad-hoc code-sign the FINAL bundle (after all edits). On Apple Silicon
+          # an unsigned/broken-signature bundle reports "damaged" once quarantined.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose "$APP" || true
+          # Archive ON macOS with ditto so symlinks/exec bits/signature survive.
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" dist/rpcemu-macos-arm64.zip
+          ls -lh dist/rpcemu-macos-arm64.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: rpcemu-macos-arm64
-          path: dist/rpcemu-macos
+          path: dist/rpcemu-macos-arm64.zip
 
   # ----------------------------------------------- Release (on version tag) --
   release:
@@ -137,17 +171,26 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package per-platform archives
+      - name: Package release assets
         run: |
           cd artifacts
           for d in */; do
             name="${d%/}"
-            zip -r "../${name}.zip" "$name" >/dev/null
+            # Attach any pre-built installer/archive (Windows .exe, macOS .zip)
+            # directly; only zip artifacts that are plain folders (Linux).
+            asset="$(find "$name" -maxdepth 1 \( -iname '*.exe' -o -iname '*.zip' \) | head -1)"
+            if [ -n "$asset" ]; then
+              cp "$asset" "../$(basename "$asset")"
+            else
+              zip -r "../${name}.zip" "$name" >/dev/null
+            fi
           done
-          ls -l ../*.zip
+          ls -l ../*.zip ../*.exe 2>/dev/null || true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.zip"
+          files: |
+            *.zip
+            *.exe
           generate_release_notes: true

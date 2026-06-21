@@ -297,6 +297,14 @@ get_broadcast_address(struct in_addr *bcast, struct in_addr *host)
             continue;
         }
 
+        /* Must have a carrier (RUNNING). This skips administratively-up but
+           disconnected virtual bridges such as an idle docker0, which would
+           otherwise be picked ahead of the real LAN NIC and send ShareFS
+           broadcasts into a dead subnet. */
+        if (!(ifa->ifa_flags & IFF_RUNNING)) {
+            continue;
+        }
+
         /* Get broadcast address */
         /* ifa_broadaddr: a glibc macro for ifa_ifu.ifu_broadaddr on Linux, a
            direct struct member on BSD/macOS - portable across both. */

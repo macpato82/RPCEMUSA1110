@@ -491,6 +491,15 @@ int main (int argc, char ** argv)
 		qputenv("QT_QPA_PLATFORM", "xcb");
 	}
 
+	// The emulated framebuffer is drawn 1 device-pixel per emulated pixel.
+	// On a desktop with a fractional display scale (e.g. 1.25x), Qt 6's
+	// high-DPI scaling would resample that pixel-exact image by the fractional
+	// factor, making it soft/blurry. Round the scale factor to the nearest
+	// whole number so the framebuffer maps 1:1 and stays crisp, while the app
+	// remains high-DPI aware (so the compositor doesn't separately upscale us).
+	QApplication::setHighDpiScaleFactorRoundingPolicy(
+	    Qt::HighDpiScaleFactorRoundingPolicy::Round);
+
 	// Initialise QT app
 	QApplication app(argc, argv);
 
